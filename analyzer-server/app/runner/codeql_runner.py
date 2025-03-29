@@ -43,7 +43,7 @@ def run_codeql(source_dir: Path, language: str) -> List[Dict]:
     # Skip java for now
     # TODO: Add Java build command support for CodeQL
     if language == "java":
-        continue
+        return[]
     
     db_path = get_or_create_codeql_db(source_dir, language)
     sarif_output = source_dir / f"codeql_result_{language}.sarif"

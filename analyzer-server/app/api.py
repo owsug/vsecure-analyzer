@@ -6,6 +6,15 @@ import tempfile
 from app.utils.unzipper import unzip_to_temp_dir
 from app.runner.semgrep_runner import run_semgrep
 from app.runner.codeql_runner import run_codeql
+from app.runner.gpt_assistant import get_gpt_recommendation
+
+from app.runner.gpt_assistant import get_gpt_recommendation
+
+def extract_code_snippet(file_path: Path, line: int, context: int = 2) -> str:
+    lines = file_path.read_text().splitlines()
+    start = max(0, line - context - 1)
+    end = min(len(lines), line + context)
+    return "\n".join(lines[start:end])
 
 
 router = APIRouter()
@@ -32,6 +41,15 @@ async def analyze_code(
 
     if run_semgrep_flag:
         semgrep_result = run_semgrep(source_dir)
+        for item in semgrep_result:
+            file_path = source_dir / item.get("path", "")
+            line = item.get("start", {}).get("line", 0)
+            code = ""
+            if file_path.exists():
+                code = extract_code_snippet(file_path, line)
+
+            recommendation = get_gpt_recommendation(item["extra"]["message"], code)
+            item["recommendation"] = recommendation
         results["semgrep"] = semgrep_result
 
     if run_codeql_flag:
