@@ -1,0 +1,19 @@
+# Node dependencies
+node_modules/
+package-lock.json
+
+# Build output
+out/
+dist/
+.vscode-test/
+
+# VSCode settings
+.vscode/
+.vscode-test/
+
+# Mac, Linux, Windows system files
+.DS_Store
+Thumbs.db
+
+# VSIX packages (if you build one)
+*.vsix
