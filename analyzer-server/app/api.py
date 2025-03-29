@@ -8,8 +8,6 @@ from app.runner.semgrep_runner import run_semgrep
 from app.runner.codeql_runner import run_codeql
 from app.runner.gpt_assistant import get_gpt_recommendation
 
-from app.runner.gpt_assistant import get_gpt_recommendation
-
 def extract_code_snippet(file_path: Path, line: int, context: int = 2) -> str:
     lines = file_path.read_text().splitlines()
     start = max(0, line - context - 1)
@@ -48,12 +46,18 @@ async def analyze_code(
             if file_path.exists():
                 code = extract_code_snippet(file_path, line)
 
-            recommendation = get_gpt_recommendation(item["extra"]["message"], code)
+            recommendation = get_gpt_recommendation(item["extra"]["message"], code, openai_api_key)
             item["recommendation"] = recommendation
         results["semgrep"] = semgrep_result
 
     if run_codeql_flag:
         codeql_result = run_codeql(source_dir, "javascript")
+        for item in codeql_result:
+            # TODO: add file_path if available for better context
+            message = item.get("message", "")
+            line = item.get("line", 0)
+            recommendation = get_gpt_recommendation(message, "", openai_api_key)
+            item["recommendation"] = recommendation
         results["codeql"] = codeql_result
 
     temp_zip_path.unlink()
