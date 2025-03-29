@@ -5,6 +5,7 @@ import tempfile
 
 from app.utils.unzipper import unzip_to_temp_dir
 from app.runner.semgrep_runner import run_semgrep
+from app.runner.codeql_runner import run_codeql
 
 
 router = APIRouter()
@@ -33,15 +34,13 @@ async def analyze_code(
         semgrep_result = run_semgrep(source_dir)
         results["semgrep"] = semgrep_result
 
+    if run_codeql_flag:
+        codeql_result = run_codeql(source_dir, "javascript")
+        results["codeql"] = codeql_result
+
+    temp_zip_path.unlink()
+
     return JSONResponse(content={
-        "message": "Analysis completed.",
-        "file_name": code_zip.filename,
+        "message": "Analysis complete.",
         "results": results
     })
-    # return JSONResponse(content={
-    #     "message": "Zip file extracted successfully.",
-    #     "file_name": code_zip.filename,
-    #     "extracted_to": str(source_dir),
-    #     "run_semgrep": run_semgrep_flag,
-    #     "run_codeql": run_codeql_flag
-    # })
