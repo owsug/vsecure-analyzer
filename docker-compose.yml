@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  analyzer-server:
+    build:
+      context: ./analyzer-server
+      dockerfile: Dockerfile.codeql
+    container_name: analyzer-server
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./analyzer-server:/app
+    env_file:
+      - ./analyzer-server/.env
+    restart: unless-stopped

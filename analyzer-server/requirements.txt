@@ -1,3 +1,16 @@
+# Web framework
 fastapi
 uvicorn
-python-multipart
+
+# Security tools
+semgrep
+python-dotenv
+
+# OpenAI integration
+openai
+
+# File handling
+aiofiles
+
+# For type hints and path handling
+typing-extensions
