@@ -51,13 +51,19 @@ async def analyze_code(
         results["semgrep"] = semgrep_result
 
     if run_codeql_flag:
-        codeql_result = run_codeql(source_dir, "javascript")
+        codeql_result = run_codeql(source_dir, "javascript") or []
         for item in codeql_result:
-            # TODO: add file_path if available for better context
             message = item.get("message", "")
             line = item.get("line", 0)
-            recommendation = get_gpt_recommendation(message, "", openai_api_key)
+            
+            full_path = source_dir / item["filePath"]
+            code = ""
+            if full_path.exists():
+                code = extract_code_snippet(full_path, item["line"])
+            
+            recommendation = get_gpt_recommendation(message, code, openai_api_key)
             item["recommendation"] = recommendation
+        
         results["codeql"] = codeql_result
 
     temp_zip_path.unlink()

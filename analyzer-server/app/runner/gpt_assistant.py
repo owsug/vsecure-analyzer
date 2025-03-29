@@ -15,7 +15,7 @@ def get_gpt_recommendation(message: str, code: str, user_api_key: str = "") -> D
             "fix": ""
         }
 
-    openai.api_key = api_key
+    OpenAI.api_key = api_key
 
     prompt = (
         "You are a security expert AI assistant. Given the following security issue description and code, "
