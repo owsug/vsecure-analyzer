@@ -1,15 +1,15 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, UploadFile, File, Form
 from fastapi.responses import JSONResponse
+from pathlib import Path
+import tempfile
+
+from app.utils.unzipper import unzip_to_temp_dir
 
 router = APIRouter()
 
 @router.get("/ping")
 def ping():
     return JSONResponse(content={"message": "vsecure-analyzer server is running."})
-
-from fastapi import UploadFile, File, Form
-from pathlib import Path
-import tempfile
 
 @router.post("/analyze")
 async def analyze_code(
@@ -23,9 +23,12 @@ async def analyze_code(
     with open(temp_zip_path, "wb") as f:
         f.write(await code_zip.read())
 
-    return {
-        "message": "Zip file received successfully.",
+    source_dir = unzip_to_temp_dir(temp_zip_path)
+
+    return JSONResponse(content={
+        "message": "Zip file extracted successfully.",
         "file_name": code_zip.filename,
+        "extracted_to": str(source_dir),
         "run_semgrep": run_semgrep_flag,
         "run_codeql": run_codeql_flag
-    }
+    })
