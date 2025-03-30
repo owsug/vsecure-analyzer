@@ -15,7 +15,30 @@ def run_semgrep(target_dir: Path) -> List[Dict]:
             check=True
         )
         output = json.loads(result.stdout)
-        return output.get("results", [])
+
+        findings = []
+        for result in output.get("results", []):
+            message = result.get("extra", {}).get("message", "")
+            start_location = result.get("start", {})
+            start_line = start_location.get("line", 0)
+            start_column = start_location.get("col", 0)
+            end_location = result.get("end", {})
+            end_column = end_location.get("col", 0)
+            full_path = result.get("path", 0)
+            file_path = Path(full_path).name
+
+            findings.append({
+                "message": message,
+                "line": start_line,
+                "column": {
+                    "start": start_column,
+                    "end": end_column
+                },
+                "filePath": file_path
+            })
+
+        return findings
+
     except subprocess.CalledProcessError as e:
-        print("Semgrep failed:", e.stderr)
+        print("[analyzer-server] Semgrep failed:", e.stderr)
         return []

@@ -1,51 +1,80 @@
 import os
 from openai import OpenAI
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 from dotenv import load_dotenv
 from typing import Dict
 
 load_dotenv()
 
-def get_gpt_recommendation(message: str, code: str, user_api_key: str = "") -> Dict:
+def get_gpt_fix(message: str, code: str, user_api_key: str = "") -> Dict:
     api_key = user_api_key or os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return {
-            "explanation": "No OpenAI API key provided.",
-            "fix": ""
-        }
+        return {"explanation": "No OpenAI API key provided.", "fixedCode": ""}
 
-    OpenAI.api_key = api_key
+    client = OpenAI(api_key=api_key)
 
     prompt = (
-        "You are a security expert AI assistant. Given the following security issue description and code, "
-        "explain clearly why it's insecure, and suggest a secure fix.\n\n"
-        f"Issue:\n{message}\n\n"
-        f"Code:\n{code}\n\n"
-        "Respond with:\n"
-        "Explanation:\n<your explanation>\n\nFix:\n<your fixed version of the code>\n"
+        "You are a security expert AI assistant."
+        " Given the following insecure code snippet, generate only the fixed version of the code"
+        " without explanation, markdown, or comments. Do not include any other text."
+        "\n\nIssue:\n" + message + "\n\n"
+        "Code:\n" + code + "\n\n"
+        "Respond with only the fixed code."
     )
 
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
+            messages=[{"role": "user", "content": prompt}],
             temperature=0.2
         )
-        content = response.choices[0].message.content
-        explanation_part = content.split("Explanation:")[-1].split("Fix:")[0].strip()
-        fix_part = content.split("Fix:")[-1].strip()
-
+        content = response.choices[0].message.content.strip()
         return {
-            "explanation": explanation_part,
-            "fix": fix_part
+            "explanation": message,
+            "fixedCode": content
         }
 
     except Exception as e:
-        print("GPT error:", str(e))
+        print("[analyzer-server] GPT error:", str(e))
+        return {"explanation": "GPT request failed.", "fixedCode": ""}
+
+def get_gpt_recommendation(message: str, code: str, user_api_key: str = "") -> Dict:
+    api_key = user_api_key or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return {"explanation": "No OpenAI API key provided.", "fixedCode": ""}
+
+    client = OpenAI(api_key=api_key)
+
+    prompt = (
+        "You are a security expert AI assistant."
+        " Analyze the following code and explain clearly what the vulnerability is,"
+        " and suggest a secure fix."
+        " Focus on clarity, without markdown or code blocks."
+        "\n\nIssue:\n" + message + "\n\n"
+        "Code:\n" + code + "\n\n"
+        "Respond with:\nExplanation: <why it's insecure>\nFixedCode: <corrected version>"
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2
+        )
+        content = response.choices[0].message.content.strip()
+
+        explanation = ""
+        fixed_code = ""
+
+        if "Explanation:" in content:
+            explanation = content.split("Explanation:")[-1].split("FixedCode:")[0].strip()
+        if "FixedCode:" in content:
+            fixed_code = content.split("FixedCode:")[-1].strip()
+
         return {
-            "explanation": "Failed to generate explanation.",
-            "fix": ""
+            "explanation": explanation or message,
+            "fixedCode": fixed_code
         }
+
+    except Exception as e:
+        print("[analyzer-server] GPT error:", str(e))
+        return {"explanation": "GPT request failed.", "fixedCode": ""}
