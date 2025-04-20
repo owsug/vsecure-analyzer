@@ -1,39 +1,38 @@
 FROM python:3.12-slim
 
-# Metadata
-LABEL maintainer="your-email@example.com"
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV CODEQL_VERSION=2.16.2
-
-# Create app directory
 WORKDIR /app
 
-# Install system dependencies
+# 필수 패키지 설치
 RUN apt-get update && apt-get install -y \
-    curl unzip git build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    curl \
+    git \
+    unzip \
+    && apt-get clean
 
-# Install Python dependencies
-RUN pip install --upgrade pip
-
-# Install Semgrep
-RUN pip install semgrep
-
-# Download and install CodeQL CLI
-RUN curl -L https://github.com/github/codeql-cli-binaries/releases/download/v${CODEQL_VERSION}/codeql-linux64.zip -o /tmp/codeql.zip && \
-    unzip /tmp/codeql.zip -d /opt && \
-    ln -s /opt/codeql/codeql /usr/local/bin/codeql && \
-    rm /tmp/codeql.zip
-
-# Copy project files
-COPY . /app/
-
-# Install Python dependencies (FastAPI, openai, etc.)
+# Python 패키지 설치
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose FastAPI port
-EXPOSE 8000
+# Semgrep 설치
+RUN pip install --no-cache-dir semgrep
 
-# Launch the server
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# CodeQL CLI 설치
+RUN curl -L -o codeql.zip https://github.com/github/codeql-cli-binaries/releases/download/v2.16.3/codeql-linux64.zip \
+    && unzip codeql.zip -d /opt \
+    && mv /opt/codeql /opt/codeql-cli \
+    && rm codeql.zip
+
+ENV PATH="/opt/codeql-cli:$PATH"
+
+RUN mkdir -p /opt/codeql-workspace && \
+    cd /opt/codeql-workspace && \
+    echo -e "dependencies:\n  codeql/javascript-queries: \"*\"" > codeql-pack.yml && \
+    codeql pack install
+
+
+ENV CODEQL_WORKSPACE="/opt/codeql-workspace"
+
+# 앱 복사
+COPY ./app ./app
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,43 +1,32 @@
-import hashlib
 import subprocess
 import json
+import hashlib
 import os
 from pathlib import Path
 from typing import List, Dict
-from dotenv import load_dotenv
 
-load_dotenv()
-
-DB_CACHE_DIR = Path(os.getenv("CODEQL_DB_DIR", "/tmp/codeql_dbs"))
+DB_CACHE_DIR = Path("/tmp/codeql_dbs")
 DB_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-QUERY_PACKS = {
-    "javascript": "codeql/javascript-queries",
-    "java": "codeql/java-queries",  # included for future support
-}
-
-def compute_file_content_hash(directory: Path) -> str:
+def compute_directory_hash(directory: Path) -> str:
     hash_obj = hashlib.sha256()
-
-    for file in sorted(directory.rglob("*")):
-        if file.is_file():
-            rel_path = file.relative_to(directory)
-            hash_obj.update(str(rel_path).encode())  # ensure consistent ordering
-            with open(file, 'rb') as f:
+    for root, _, files in sorted(os.walk(directory)):
+        for file in sorted(files):
+            file_path = Path(root) / file
+            with open(file_path, 'rb') as f:
                 while chunk := f.read(8192):
                     hash_obj.update(chunk)
-
     return hash_obj.hexdigest()
 
 def get_or_create_codeql_db(source_dir: Path, language: str) -> Path:
-    key = compute_file_content_hash(source_dir)
+    key = compute_directory_hash(source_dir)
     db_path = DB_CACHE_DIR / f"{key}_{language}"
 
     if db_path.exists():
-        print(f"[analyzer-server] Reusing existing CodeQL DB: {db_path}")
+        print(f"Reusing existing CodeQL DB: {db_path}")
         return db_path
 
-    print(f"[analyzer-server] Creating new CodeQL DB: {db_path}")
+    print(f"Creating new CodeQL DB: {db_path}")
     try:
         subprocess.run([
             "codeql", "database", "create", str(db_path),
@@ -45,68 +34,59 @@ def get_or_create_codeql_db(source_dir: Path, language: str) -> Path:
             "--source-root", str(source_dir)
         ], check=True)
     except subprocess.CalledProcessError as e:
-        print(f"[analyzer-server] CodeQL DB creation failed: {e}")
-        return None
+        print("[codeql_runner] CodeQL database creation failed:", e.stderr)
+        return Path()
 
     return db_path
 
 def run_codeql(source_dir: Path, language: str) -> List[Dict]:
     if language == "java":
-        print("S[analyzer-server] kipping Java (TODO: build support needed)")
-        return []
-
-    query_pack = QUERY_PACKS.get(language)
-    if not query_pack:
-        print(f"[analyzer-server] No query pack found for language: {language}")
         return []
 
     db_path = get_or_create_codeql_db(source_dir, language)
-    if not db_path:
+    if not db_path.exists():
         return []
 
-    sarif_output = source_dir / f"[analyzer-server] codeql_result_{language}.sarif"
+    sarif_output = source_dir / f"codeql_result_{language}.sarif"
 
     try:
         subprocess.run([
             "codeql", "database", "analyze", str(db_path),
-            query_pack,
             "--format=sarifv2.1.0",
             "--output", str(sarif_output),
-            "--rerun"
+            "--rerun",
+            "--search-path", "/opt/codeql-workspace",  # 쿼리 설치 경로
+            "codeql/javascript-queries"                # 패키지 이름
         ], check=True)
+
+
     except subprocess.CalledProcessError as e:
-        print(f"[analyzer-server] CodeQL analysis failed: {e}")
+        print("[codeql_runner] CodeQL analysis failed:", e.stderr)
         return []
 
-    findings = []
     try:
         with open(sarif_output, "r") as f:
             sarif_data = json.load(f)
-        
-        for run in sarif_data.get("runs", []):
-            for result in run.get("results", []):
-                message = result.get("message", {}).get("text", "")
-                location = result.get("locations", [{}])[0]
-                physical = location.get("physicalLocation", {})
-                region = physical.get("region", {})
-                artifact = physical.get("artifactLocation", {})
-
-                start_line = region.get("startLine", 0)
-                start_column = region.get("startColumn", 0)
-                end_column = region.get("endColumn", 0)
-                file_path = artifact.get("uri", "")
-
-                findings.append({
-                    "message": message,
-                    "line": start_line,
-                    "column": {
-                        "start": start_column,
-                        "end": end_column
-                    },
-                    "filePath": file_path
-                })
-
     except Exception as e:
-        print(f"[analyzer-server] Failed to parse SARIF result: {e}")
+        print("[codeql_runner] Failed to read SARIF output:", e)
+        return []
 
+    findings = []
+    for run in sarif_data.get("runs", []):
+        for result in run.get("results", []):
+            message = result.get("message", {}).get("text", "")
+            location = result.get("locations", [{}])[0]
+            physical = location.get("physicalLocation", {})
+            region = physical.get("region", {})
+            artifact = physical.get("artifactLocation", {})
+
+            findings.append({
+                "message": message,
+                "line": region.get("startLine", 0),
+                "column": {
+                    "start": region.get("startColumn", 0),
+                    "end": region.get("endColumn", 0)
+                },
+                "filePath": Path(artifact.get("uri", "")).name
+            })
     return findings

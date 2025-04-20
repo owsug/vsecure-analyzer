@@ -1,16 +1,5 @@
-# Web framework
-fastapi
+fastapi[standard]
 uvicorn
-
-# Security tools
-semgrep
-python-dotenv
-
-# OpenAI integration
+python-multipart
 openai
-
-# File handling
-aiofiles
-
-# For type hints and path handling
-typing-extensions
+python-dotenv
